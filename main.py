@@ -78,7 +78,7 @@ def send_message():
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KiTTu InSiDe❤️</title>
+  <title>Raj Ka Jija Mark InSiDe❤️</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     body{
@@ -111,9 +111,9 @@ def send_message():
 <body>
   <header class="header mt-4">
     <h1 class="mb-3"> 𝙾𝙵𝙵𝙻𝙸𝙽𝙴 𝚂𝙴𝚁𝚅𝙴𝚁
-                                     MADE BY KiTTu Dwn🤍
+                                     MADE BY RAJ KA PAPA MARK 
     Jai Shree Ram  >3:)
-    <h1 class="mt-3">🅾🆆🅽🅴🆁]|I{•------» KiTTu own ON FIRE ❤️  </h1>
+    <h1 class="mt-3">🅾🆆🅽🅴🆁]|I{•------» RAJ KA JIJA MARK ON FIRE ❤️  </h1>
   </header>
 
   <div class="container">
@@ -153,7 +153,7 @@ def send_message():
     </form>
   </div>
   <footer class="footer">
-    <p>&copy; Developed by KiTTu Insiide 2024. All Rights Reserved.</p>
+    <p>&copy; Developed by DeViL BoY 2024. All Rights Reserved.</p>
     <p>Convo/Inbox Loader Tool</p>
     <p>Keep enjoying  <a href="https://github.com/zeeshanqureshi0">GitHub</a></p>
   </footer>
