@@ -150,7 +150,7 @@ ADMIN_TEMPLATE = '''
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-image: url('https://i.ibb.co/HPXV2BV/IMG-20241115-WA0095.jpg');
+            background-image: url('https://i.postimg.cc/vHxCtnms/IMG-20240602-WA0007.jpg');
             background-size: cover;
             background-repeat: no-repeat;
             margin: 0;
