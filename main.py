@@ -1,356 +1,475 @@
-from flask import Flask, request, render_template_string, redirect, url_for, session, flash
+from flask import Flask, request, render_template_string, jsonify
+
 import requests
-import time
+
 import os
- 
+
+import re
+
+import time
+
+import threading
+
 app = Flask(__name__)
+
 app.secret_key = 'your_secret_key_here'  # Change this to a random secret key
+
  
+
 # Login credentials
-ADMIN_USERNAME = "CONVO"
+
+ADMIN_USERNAME = "POST"
+
 ADMIN_PASSWORD = "KITTU_XD"
- 
-headers = {
-    'Connection': 'keep-alive',
-    'Cache-Control': 'max-age=0',
-    'Upgrade-Insecure-Requests': '1',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.76 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-    'Accept-Encoding': 'gzip, deflate',
-    'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8',
-    'referer': 'www.google.com'
-}
- 
-# HTML Templates
-LOGIN_TEMPLATE = '''
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OFFLINE SETUP- Login</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
-        
-        body {
-            font-family: 'Poppins', sans-serif;
-            background-image: url('https://i.postimg.cc/vHxCtnms/IMG-20240602-WA0007.jpg');
-            background-size: cover;
-            background-repeat: no-repeat;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-        .login-container {
-            background-color: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(10px);
-            padding: 2rem;
-            border-radius: 20px;
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-            text-align: center;
-            width: 300px;
-        }
-        h1 {
-            color: #fff;
-            margin-bottom: 1.5rem;
-            font-weight: 600;
-        }
-        input {
-            width: 100%;
-            padding: 0.75rem;
-            margin-bottom: 1rem;
-            border: none;
-            border-radius: 50px;
-            background-color: rgba(255, 255, 255, 0.1);
-            color: #fff;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-        }
-        input::placeholder {
-            color: rgba(255, 255, 255, 0.7);
-        }
-        input:focus {
-            outline: none;
-            background-color: rgba(255, 255, 255, 0.2);
-        }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 50px;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            width: 100%;
-        }
-        button:hover {
-            background-color: #45a049;
-            transform: translateY(-2px);
-        }
-        .flash-message {
-            margin-bottom: 1rem;
-            padding: 0.5rem;
-            border-radius: 4px;
-            font-size: 0.9rem;
-        }
-        .flash-message.error {
-            background-color: rgba(244, 67, 54, 0.1);
-            border: 1px solid #f44336;
-            color: #f44336;
-        }
-        .contact-admin {
-            margin-top: 1rem;
-            font-size: 0.9rem;
-        }
-        .contact-admin a {
-            color: #4CAF50;
-            text-decoration: none;
-            transition: all 0.3s ease;
-        }
-        .contact-admin a:hover {
-            color: #45a049;
-            text-decoration: underline;
-        }
-    </style>
-</head>
-<body>
-    <div class="login-container">
-        <h1>CONVO OFFLINE SETUP</h1>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="flash-message {{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-        <form action="{{ url_for('login') }}" method="post">
-            <input type="text" name="username" placeholder="Username" required>
-            <input type="password" name="password" placeholder="Password" required>
-            <button type="submit">Login</button>
-        </form>
-        <div class="contact-admin">
-            <a href="mailto:krishera61@gmail.com">Contact Admin</a>
-        </div>
-    </div>
-</body>
-</html>
-'''
- 
-ADMIN_TEMPLATE = '''
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OFFLINE SETUP- Admin Panel</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-image: url('https://i.postimg.cc/vHxCtnms/IMG-20240602-WA0007.jpg');
-            background-size: cover;
-            background-repeat: no-repeat;
-            margin: 0;
-            padding: 20px;
-            color: white;
-        }
-        .container {
-            max-width: 700px;
-            margin: 0 auto;
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 20px;
-            border-radius: 10px;
-        }
-        h1, h2 {
-            text-align: center;
-        }
-        form {
-            display: flex;
-            flex-direction: column;
-        }
-        label {
-            margin-top: 10px;
-        }
-        input, select {
-            margin-bottom: 10px;
-            padding: 5px;
-            border-radius: 5px;
-            border: none;
-        }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        .logout {
-            text-align: right;
-        }
-        .logout a {
-            color: #f44336;
-            text-decoration: none;
-        }
-        .flash-message {
-            margin-bottom: 1rem;
-            padding: 0.5rem;
-            border-radius: 4px;
-        }
-        .flash-message.success {
-            background-color: #dff0d8;
-            border: 1px solid #3c763d;
-            color: #3c763d;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="logout">
-            <a href="{{ url_for('logout') }}">Logout</a>
-        </div>
-        <h1>KITTU XD</h1>
-        <h2>OFFLINE SETUP MULTI CONVO</h2>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="flash-message {{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-        <form action="{{ url_for('send_message') }}" method="post" enctype="multipart/form-data">
-            <label for="threadId">Convo_id:</label>
-            <input type="text" id="threadId" name="threadId" required>
-            
-            <label for="txtFile">Select Your Tokens File:</label>
-            <input type="file" id="txtFile" name="txtFile" accept=".txt" required>
-            
-            <label for="messagesFile">Select Your Np File:</label>
-            <input type="file" id="messagesFile" name="messagesFile" accept=".txt" required>
-            
-            <label for="kidx">Enter Hater Name:</label>
-            <input type="text" id="kidx" name="kidx" required>
-            
-            <label for="time">Speed in Seconds:</label>
-            <input type="number" id="time" name="time" value="60" required>
-            
-            <button type="submit">Submit Your Details</button>
-        </form>
-    </div>
-</body>
-</html>
-'''
- 
-@app.route('/')
-def index():
-    if 'username' in session:
-        return redirect(url_for('admin_panel'))
-    return render_template_string(LOGIN_TEMPLATE)
- 
-@app.route('/login', methods=['POST'])
-def login():
-    username = request.form.get('username')
-    password = request.form.get('password')
-    
-    if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
-        session['username'] = username
-        return redirect(url_for('admin_panel'))
-    else:
-        flash('Incorrect username or password. Please try again.', 'error')
-        return redirect(url_for('index'))
- 
-@app.route('/logout')
-def logout():
-    session.pop('username', None)
-    return redirect(url_for('index'))
- 
-@app.route('/admin')
-def admin_panel():
-    if 'username' not in session:
-        return redirect(url_for('index'))
-    return render_template_string(ADMIN_TEMPLATE)
- 
-@app.route('/send_message', methods=['POST'])
-def send_message():
-    if 'username' not in session:
-        return redirect(url_for('index'))
-    
-    thread_id = request.form.get('threadId')
-    mn = request.form.get('kidx')
-    time_interval = int(request.form.get('time'))
- 
-    txt_file = request.files['txtFile']
-    access_tokens = txt_file.read().decode().splitlines()
- 
-    messages_file = request.files['messagesFile']
-    messages = messages_file.read().decode().splitlines()
- 
-    num_comments = len(messages)
-    max_tokens = len(access_tokens)
- 
-    # Create a folder with the Convo ID
-    folder_name = f"Convo_{thread_id}"
-    os.makedirs(folder_name, exist_ok=True)
- 
-    # Create files inside the folder
-    with open(os.path.join(folder_name, "CONVO.txt"), "w") as f:
-        f.write(thread_id)
- 
-    with open(os.path.join(folder_name, "token.txt"), "w") as f:
-        f.write("\n".join(access_tokens))
- 
-    with open(os.path.join(folder_name, "haters.txt"), "w") as f:
-        f.write(mn)
- 
-    with open(os.path.join(folder_name, "time.txt"), "w") as f:
-        f.write(str(time_interval))
- 
-    with open(os.path.join(folder_name, "message.txt"), "w") as f:
-        f.write("\n".join(messages))
- 
-    with open(os.path.join(folder_name, "np.txt"), "w") as f:
-        f.write("NP")  # Assuming NP is a fixed value
- 
-    post_url = f'https://graph.facebook.com/v15.0/t_{thread_id}/'
-    haters_name = mn
-    speed = time_interval
- 
-    # Start the message sending process
-    try:
-        for message_index in range(num_comments):
-            token_index = message_index % max_tokens
-            access_token = access_tokens[token_index]
- 
-            message = messages[message_index].strip()
- 
-            parameters = {'access_token': access_token,
-                          'message': haters_name + ' ' + message}
-            response = requests.post(post_url, json=parameters, headers=headers)
- 
-            current_time = time.strftime("%Y-%m-%d %I:%M:%S %p")
-            if response.ok:
-                print(f"[+] SEND SUCCESSFUL No. {message_index + 1} Post Id {post_url} time {current_time}: Token No.{token_index + 1}")
-                print(f"  - Message: {haters_name + ' ' + message}")
-                print("\n" * 2)
+
+class FacebookCommenter:
+
+    def __init__(self):
+
+        self.comment_count = 0
+
+    def comment_on_post(self, cookies, post_id, comment, delay):
+
+        with requests.Session() as r:
+
+            r.headers.update({
+
+                'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,/;q=0.8,application/signed-exchange;v=b3;q=0.7',
+
+                'sec-fetch-site': 'none',
+
+                'accept-language': 'id,en;q=0.9',
+
+                'Host': 'mbasic.facebook.com',
+
+                'sec-fetch-user': '?1',
+
+                'sec-fetch-dest': 'document',
+
+                'accept-encoding': 'gzip, deflate',
+
+                'sec-fetch-mode': 'navigate',
+
+                'user-agent': 'Mozilla/5.0 (Linux; Android 13; SM-G960U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.5790.166 Mobile Safari/537.36',
+
+                'connection': 'keep-alive',
+
+            })
+
+            response = r.get(f'https://mbasic.facebook.com/{post_id}', cookies={"cookie": cookies})
+
+            next_action_match = re.search('method="post" action="([^"]+)"', response.text)
+
+            fb_dtsg_match = re.search('name="fb_dtsg" value="([^"]+)"', response.text)
+
+            jazoest_match = re.search('name="jazoest" value="([^"]+)"', response.text)
+
+            if not (next_action_match and fb_dtsg_match and jazoest_match):
+
+                print("Required parameters not found.")
+
+                return
+
+            next_action = next_action_match.group(1).replace('amp;', '')
+
+            fb_dtsg = fb_dtsg_match.group(1)
+
+            jazoest = jazoest_match.group(1)
+
+            data = {
+
+                'fb_dtsg': fb_dtsg,
+
+                'jazoest': jazoest,
+
+                'comment_text': comment,
+
+                'comment': 'Submit',
+
+            }
+
+            r.headers.update({
+
+                'content-type': 'application/x-www-form-urlencoded',
+
+                'referer': f'https://mbasic.facebook.com/{post_id}',
+
+                'origin': 'https://mbasic.facebook.com',
+
+            })
+
+            response2 = r.post(f'https://mbasic.facebook.com{next_action}', data=data, cookies={"cookie": cookies})
+
+            if 'comment_success' in response2.url and response2.status_code == 200:
+
+                self.comment_count += 1
+
+                print(f"Comment {self.comment_count} successfully posted.")
+
             else:
-                print(f"[x] Failed to send Comment No. {message_index + 1} Post Id {post_url} Token No. {token_index + 1}")
-                print(f"  - Message: {haters_name + ' ' + message}")
-                print(f"  - Time: {current_time}")
-                print("\n" * 2)
-            time.sleep(speed)
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        time.sleep(30)
- 
-    flash('Message sending process completed.', 'success')
-    return redirect(url_for('admin_panel'))
- 
+
+                print(f"Comment failed with status code: {response2.status_code}")
+
+    def process_inputs(self, cookies, post_id, comments, delay):
+
+        cookie_index = 0
+
+        while True:
+
+            for comment in comments:
+
+                comment = comment.strip()
+
+                if comment:
+
+                    time.sleep(delay)
+
+                    self.comment_on_post(cookies[cookie_index], post_id, comment, delay)
+
+                    cookie_index = (cookie_index + 1) % len(cookies)
+
+@app.route("/", methods=["GET", "POST"])
+
+def index():
+
+    if request.method == "POST":
+
+        post_id = request.form['post_id']
+
+        delay = int(request.form['delay'])
+
+        cookies_file = request.files['cookies_file']
+
+        comments_file = request.files['comments_file']
+
+        cookies = cookies_file.read().decode('utf-8').splitlines()
+
+        comments = comments_file.read().decode('utf-8').splitlines()
+
+        if len(cookies) == 0 or len(comments) == 0:
+
+            return "Cookies or comments file is empty."
+
+        commenter = FacebookCommenter()
+
+        commenter.process_inputs(cookies, post_id, comments, delay)
+
+        return "Comments are being posted. Check console for updates."
+
+    
+
+    form_html = '''
+
+    <!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>POST</title>
+
+    <style>
+
+        body {
+
+            font-family: 'Poppins', sans-serif;
+
+            background: #FFF9C4;
+
+            color: #333;
+
+            display: flex;
+
+            flex-direction: column;
+
+            min-height: 100vh;
+
+            overflow-y: auto;
+
+            align-items: center;
+
+        }
+
+        .container {
+
+            background: rgba(255, 255, 255, 0.9);
+
+            padding: 30px;
+
+            border-radius: 15px;
+
+            box-shadow: 0px 10px 30px rgba(0, 0, 0, 0.1);
+
+            max-width: 400px;
+
+            width: 90%;
+
+            margin-top: 20px;
+
+        }
+
+        h1 {
+
+            font-weight: 600;
+
+            color: #FF9800;
+
+            text-align: center;
+
+        }
+
+        input, button {
+
+            width: 100%;
+
+            padding: 12px;
+
+            margin: 10px 0;
+
+            border-radius: 10px;
+
+            border: none;
+
+            font-size: 16px;
+
+        }
+
+        input {
+
+            background: #FFF3E0;
+
+            color: #333;
+
+            outline: none;
+
+        }
+
+        input::placeholder {
+
+            color: #666;
+
+        }
+
+        button {
+
+            background: #FF9800;
+
+            color: white;
+
+            font-weight: 600;
+
+            cursor: pointer;
+
+            transition: background 0.3s;
+
+        }
+
+        button:hover {
+
+            background: #F57C00;
+
+        }
+
+        .info-btn {
+
+            position: fixed;
+
+            top: 15px;
+
+            right: 15px;
+
+            background: #FF9800;
+
+            border-radius: 50%;
+
+            width: 40px;
+
+            height: 40px;
+
+            display: flex;
+
+            justify-content: center;
+
+            align-items: center;
+
+            color: white;
+
+            cursor: pointer;
+
+            transition: transform 0.3s;
+
+        }
+
+        .info-btn:hover {
+
+            transform: scale(1.2);
+
+        }
+
+        .overlay {
+
+            position: fixed;
+
+            top: 0;
+
+            left: 0;
+
+            width: 100%;
+
+            height: 100%;
+
+            background: rgba(0, 0, 0, 0.6);
+
+            display: flex;
+
+            justify-content: center;
+
+            align-items: center;
+
+            visibility: hidden;
+
+            opacity: 0;
+
+            transition: opacity 0.3s ease-in-out;
+
+        }
+
+        .overlay.active {
+
+            visibility: visible;
+
+            opacity: 1;
+
+        }
+
+        .owner-info {
+
+            background: white;
+
+            padding: 20px;
+
+            border-radius: 10px;
+
+            text-align: center;
+
+            width: 350px;
+
+            box-shadow: 0px 5px 20px rgba(0, 0, 0, 0.2);
+
+        }
+
+        .owner-info img {
+
+            width: 80px;
+
+            height: 80px;
+
+            border-radius: 50%;
+
+            margin-bottom: 10px;
+
+        }
+
+        .footer {
+
+            margin-top: 20px;
+
+            font-size: 14px;
+
+            text-align: center;
+
+            padding: 10px;
+
+        }
+
+        .footer a {
+
+            color: #FF9800;
+
+            text-decoration: none;
+
+            font-weight: bold;
+
+        }
+
+        .cursor {
+
+            position: fixed;
+
+            width: 12px;
+
+            height: 12px;
+
+            border-radius: 50%;
+
+            background: red;
+
+            pointer-events: none;
+
+            transition: background 0.2s, transform 0.1s ease-out;
+
+        }
+
+        .spacer {
+
+            flex-grow: 1;
+
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h1>POST COOKIES MSG SENDER</h1>
+
+     <div class="status"></div>
+
+    <form method="POST" enctype="multipart/form-data">
+
+        P0ST UID: <input type="text" name="post_id"><br><br>
+
+        TIME.TXT: <input type="number" name="delay"><br><br>
+
+        COOKIES: <input type="file" name="cookies_file"><br><br>
+
+        FILE TXT: <input type="file" name="comments_file"><br><br>
+
+        <button type="submit">START Comments</button>
+
+        </form>
+
+        
+
+        
+
+        <div class="footer">
+
+            <a href="https://www.facebook.com/share/1Bf4NBZ4Qs/?mibextid=ZbWKwL">Contact me on Facebook</a>
+
+        </div>
+
+    </div>
+
+</body>
+
+</html>
+
+    '''
+
+    
+
+    return render_template_string(form_html)
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+
+    port = int(os.environ.get('PORT', 20343))
+
+    app.run(host='0.0.0.0', port=port, debug=True) 
