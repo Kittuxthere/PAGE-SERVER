@@ -133,7 +133,7 @@ LOGIN_TEMPLATE = '''
             <button type="submit">Login</button>
         </form>
         <div class="contact-admin">
-            <a href="mailto:krishera61@gmail.com">Contact Admin</a>
+            <a href="mailto:917307827517">Contact Admin</a>
         </div>
     </div>
 </body>
