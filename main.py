@@ -1,356 +1,279 @@
-from flask import Flask, request, render_template_string, redirect, url_for, session, flash
-import requests
+from flask import Flask, request, jsonify, Response
+import threading
 import time
-import os
- 
+import requests
+import uuid
+
+# --- Flask App Initialization ---
 app = Flask(__name__)
-app.secret_key = 'your_secret_key_here'  # Change this to a random secret key
- 
-# Login credentials
-ADMIN_USERNAME = "CONVO"
-ADMIN_PASSWORD = "KITTU_XD"
- 
-headers = {
-    'Connection': 'keep-alive',
-    'Cache-Control': 'max-age=0',
-    'Upgrade-Insecure-Requests': '1',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.76 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-    'Accept-Encoding': 'gzip, deflate',
-    'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8',
-    'referer': 'www.google.com'
-}
- 
-# HTML Templates
-LOGIN_TEMPLATE = '''
+
+# --- Global In-Memory Task Storage ---
+running_tasks = {}
+
+# ==============================================================================
+# === THE WORKER FUNCTION (RUNS IN A BACKGROUND THREAD) ===
+# ==============================================================================
+def message_sending_worker(task_id, access_tokens, thread_id, messages, hater_name, time_interval):
+    """
+    This function is now modified to work EXACTLY like your original script.
+    """
+    stop_event = running_tasks[task_id]['stop_event']
+    
+    print(f"✅ [Task: {task_id}] Thread started for conversation: {thread_id}")
+
+    num_messages = len(messages)
+    num_tokens = len(access_tokens)
+    
+    # ### CHANGE 1 HERE ###: Removed '/messages' to match your working script's URL.
+    post_url = f'https://graph.facebook.com/v15.0/t_{thread_id}/'
+    
+    message_index = 0
+    while not stop_event.is_set():
+        try:
+            token_index = message_index % num_tokens
+            access_token = access_tokens[token_index]
+            
+            current_message_text = messages[message_index % num_messages]
+            final_message = f"{hater_name} {current_message_text}"
+
+            parameters = {
+                'access_token': access_token,
+                'message': final_message
+            }
+            
+            # ### CHANGE 2 HERE ###: Changed from `data=parameters` back to `json=parameters`.
+            # We are also adding the Content-Type header to be safe.
+            response = requests.post(post_url, json=parameters, headers={'Content-Type': 'application/json'})
+
+            current_time_str = time.strftime("%Y-%m-%d %I:%M:%S %p")
+            
+            if response.ok:
+                print(f"\n[Task: {task_id}] [✓] Message Sent! | To: {thread_id}")
+            else:
+                error_info = response.json().get('error', {}).get('message', 'No specific error from API.')
+                print(f"\n[Task: {task_id}] [✗] Failed to Send! | To: {thread_id} | Error: {error_info}")
+                
+            message_index += 1
+            stop_event.wait(timeout=time_interval)
+
+        except requests.exceptions.RequestException as e:
+            print(f"\n[Task: {task_id}] [✗] Network Error: {e}")
+            print("  └── Retrying in 30 seconds...")
+            stop_event.wait(timeout=30)
+
+    if task_id in running_tasks:
+        del running_tasks[task_id]
+    print(f"🛑 [Task: {task_id}] Thread has been stopped and cleaned up.")
+
+# ==============================================================================
+# === HTML, CSS, JAVASCRIPT as a Python String (No Changes Here) ===
+# ==============================================================================
+HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OFFLINE SETUP- Login</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
-        
-        body {
-            font-family: 'Poppins', sans-serif;
-            background-image: url('https://ibb.co/kVYZh3tb');
-            background-size: cover;
-            background-repeat: no-repeat;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-        .login-container {
-            background-color: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(10px);
-            padding: 2rem;
-            border-radius: 20px;
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-            text-align: center;
-            width: 300px;
-        }
-        h1 {
-            color: #fff;
-            margin-bottom: 1.5rem;
-            font-weight: 600;
-        }
-        input {
-            width: 100%;
-            padding: 0.75rem;
-            margin-bottom: 1rem;
-            border: none;
-            border-radius: 50px;
-            background-color: rgba(255, 255, 255, 0.1);
-            color: #fff;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-        }
-        input::placeholder {
-            color: rgba(255, 255, 255, 0.7);
-        }
-        input:focus {
-            outline: none;
-            background-color: rgba(255, 255, 255, 0.2);
-        }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 50px;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            width: 100%;
-        }
-        button:hover {
-            background-color: #45a049;
-            transform: translateY(-2px);
-        }
-        .flash-message {
-            margin-bottom: 1rem;
-            padding: 0.5rem;
-            border-radius: 4px;
-            font-size: 0.9rem;
-        }
-        .flash-message.error {
-            background-color: rgba(244, 67, 54, 0.1);
-            border: 1px solid #f44336;
-            color: #f44336;
-        }
-        .contact-admin {
-            margin-top: 1rem;
-            font-size: 0.9rem;
-        }
-        .contact-admin a {
-            color: #4CAF50;
-            text-decoration: none;
-            transition: all 0.3s ease;
-        }
-        .contact-admin a:hover {
-            color: #45a049;
-            text-decoration: underline;
-        }
-    </style>
-</head>
-<body>
-    <div class="login-container">
-        <h1>CONVO OFFLINE SETUP</h1>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="flash-message {{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-        <form action="{{ url_for('login') }}" method="post">
-            <input type="text" name="username" placeholder="Username" required>
-            <input type="password" name="password" placeholder="Password" required>
-            <button type="submit">Login</button>
-        </form>
-        <div class="contact-admin">
-            <a href="mailto:917307827517">Contact Admin</a>
-        </div>
-    </div>
-</body>
-</html>
-'''
- 
-ADMIN_TEMPLATE = '''
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OFFLINE SETUP- Admin Panel</title>
+    <title>Multi-Convo Messaging Tool</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            background-image: url('https://i.postimg.cc/vHxCtnms/IMG-20240602-WA0007.jpg');
-            background-size: cover;
-            background-repeat: no-repeat;
-            margin: 0;
-            padding: 20px;
-            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5; margin: 0; padding: 20px; color: #1c1e21;
         }
         .container {
-            max-width: 700px;
-            margin: 0 auto;
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 20px;
-            border-radius: 10px;
+            max-width: 800px; margin: 20px auto; background: #ffffff; padding: 25px 30px;
+            border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
-        h1, h2 {
-            text-align: center;
+        h1, h2 { color: #007bff; border-bottom: 2px solid #e7e7e7; padding-bottom: 10px; margin-top: 0; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-weight: 600; margin-bottom: 8px; }
+        input[type="text"], input[type="number"], textarea {
+            width: 100%; padding: 12px; border: 1px solid #ccd0d5; border-radius: 6px;
+            box-sizing: border-box; font-size: 16px;
         }
-        form {
-            display: flex;
-            flex-direction: column;
-        }
-        label {
-            margin-top: 10px;
-        }
-        input, select {
-            margin-bottom: 10px;
-            padding: 5px;
-            border-radius: 5px;
-            border: none;
-        }
+        textarea { resize: vertical; min-height: 100px; }
         button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
+            background-color: #007bff; color: white; border: none; padding: 12px 20px;
+            border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background-color 0.2s;
         }
-        button:hover {
-            background-color: #45a049;
+        button:hover { background-color: #0056b3; }
+        #responseMessage { margin-top: 20px; padding: 15px; border-radius: 6px; text-align: center; display: none; }
+        .success { background-color: #d4edda; color: #155724; display: block; }
+        .error { background-color: #f8d7da; color: #721c24; display: block; }
+        #taskList { list-style-type: none; padding: 0; }
+        .task-item {
+            background: #f7f7f7; padding: 15px; border-radius: 8px; margin-bottom: 10px;
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
         }
-        .logout {
-            text-align: right;
-        }
-        .logout a {
-            color: #f44336;
-            text-decoration: none;
-        }
-        .flash-message {
-            margin-bottom: 1rem;
-            padding: 0.5rem;
-            border-radius: 4px;
-        }
-        .flash-message.success {
-            background-color: #dff0d8;
-            border: 1px solid #3c763d;
-            color: #3c763d;
-        }
+        .task-details { font-family: 'Courier New', Courier, monospace; font-size: 14px; }
+        .stop-btn { background-color: #dc3545; }
+        .stop-btn:hover { background-color: #c82333; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="logout">
-            <a href="{{ url_for('logout') }}">Logout</a>
-        </div>
-        <h1>KITTU XD</h1>
-        <h2>OFFLINE SETUP MULTI CONVO</h2>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="flash-message {{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-        <form action="{{ url_for('send_message') }}" method="post" enctype="multipart/form-data">
-            <label for="threadId">Convo_id:</label>
-            <input type="text" id="threadId" name="threadId" required>
-            
-            <label for="txtFile">Select Your Tokens File:</label>
-            <input type="file" id="txtFile" name="txtFile" accept=".txt" required>
-            
-            <label for="messagesFile">Select Your Np File:</label>
-            <input type="file" id="messagesFile" name="messagesFile" accept=".txt" required>
-            
-            <label for="kidx">Enter Hater Name:</label>
-            <input type="text" id="kidx" name="kidx" required>
-            
-            <label for="time">Speed in Seconds:</label>
-            <input type="number" id="time" name="time" value="60" required>
-            
-            <button type="submit">Submit Your Details</button>
+        <h1>Messaging Task Controller</h1>
+        <form id="taskForm">
+            <h2>Start a New Task</h2>
+            <div class="form-group">
+                <label for="access_tokens">Access Tokens (one per line)</label>
+                <textarea id="access_tokens" required placeholder="Paste your access token(s) here..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="thread_id">Conversation (Thread) ID</label>
+                <input type="text" id="thread_id" required placeholder="e.g., 24381285751478047">
+            </div>
+            <div class="form-group">
+                <label for="messages">Messages (one per line)</label>
+                <textarea id="messages" required placeholder="Hello there!\\nHow are you?"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="hater_name">Prefix Name (e.g., Hater's Name)</label>
+                <input type="text" id="hater_name" required placeholder="e.g., Mr. Hater">
+            </div>
+            <div class="form-group">
+                <label for="time_interval">Time Interval (seconds)</label>
+                <input type="number" id="time_interval" value="5" min="1" required>
+            </div>
+            <button type="submit">Start Task</button>
         </form>
+        <div id="responseMessage"></div>
+        <div id="runningTasksSection">
+            <h2>Running Tasks</h2>
+            <ul id="taskList"></ul>
+        </div>
     </div>
+    <script>
+        const taskForm = document.getElementById('taskForm');
+        const responseMessageDiv = document.getElementById('responseMessage');
+        const taskListUl = document.getElementById('taskList');
+        taskForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const getArrayFromTextarea = (id) => document.getElementById(id).value.split('\\n').filter(line => line.trim() !== '');
+            const payload = {
+                access_tokens: getArrayFromTextarea('access_tokens'),
+                thread_id: document.getElementById('thread_id').value,
+                messages: getArrayFromTextarea('messages'),
+                hater_name: document.getElementById('hater_name').value,
+                time_interval: parseInt(document.getElementById('time_interval').value, 10)
+            };
+            try {
+                const response = await fetch('/start-task', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    responseMessageDiv.className = 'success';
+                    responseMessageDiv.textContent = `Success: ${data.message} (ID: ${data.task_id})`;
+                    taskForm.reset();
+                } else { throw new Error(data.error || 'An unknown error occurred.'); }
+            } catch (error) {
+                responseMessageDiv.className = 'error';
+                responseMessageDiv.textContent = `Error: ${error.message}`;
+            }
+            fetchRunningTasks();
+        });
+        const fetchRunningTasks = async () => {
+            try {
+                const response = await fetch('/list-tasks');
+                const data = await response.json();
+                taskListUl.innerHTML = '';
+                if (data.running_tasks && data.running_tasks.length > 0) {
+                    data.running_tasks.forEach(task => {
+                        const li = document.createElement('li');
+                        li.className = 'task-item';
+                        li.innerHTML = `
+                            <div class="task-details">
+                                <strong>ID:</strong> ${task.task_id}<br>
+                                <strong>Target:</strong> ${task.details.thread_id}
+                            </div>
+                            <button class="stop-btn" data-task-id="${task.task_id}">Stop Task</button>
+                        `;
+                        taskListUl.appendChild(li);
+                    });
+                } else { taskListUl.innerHTML = '<li>No tasks are currently running.</li>'; }
+            } catch (error) {
+                console.error("Failed to fetch tasks:", error);
+                taskListUl.innerHTML = '<li>Could not load running tasks. Is the server running?</li>';
+            }
+        };
+        taskListUl.addEventListener('click', async (event) => {
+            if (event.target.classList.contains('stop-btn')) {
+                const taskId = event.target.getAttribute('data-task-id');
+                if (!confirm(`Are you sure you want to stop task ${taskId}?`)) return;
+                try {
+                    const response = await fetch(`/stop-task/${taskId}`, { method: 'POST' });
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.error);
+                    responseMessageDiv.className = 'success';
+                    responseMessageDiv.textContent = data.message;
+                } catch (error) {
+                    responseMessageDiv.className = 'error';
+                    responseMessageDiv.textContent = `Error: ${error.message}`;
+                }
+                fetchRunningTasks();
+            }
+        });
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchRunningTasks();
+            setInterval(fetchRunningTasks, 5000);
+        });
+    </script>
 </body>
 </html>
-'''
- 
+"""
+
+# ==============================================================================
+# === FLASK API ENDPOINTS (No Changes Here) ===
+# ==============================================================================
 @app.route('/')
 def index():
-    if 'username' in session:
-        return redirect(url_for('admin_panel'))
-    return render_template_string(LOGIN_TEMPLATE)
- 
-@app.route('/login', methods=['POST'])
-def login():
-    username = request.form.get('username')
-    password = request.form.get('password')
-    
-    if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
-        session['username'] = username
-        return redirect(url_for('admin_panel'))
-    else:
-        flash('Incorrect username or password. Please try again.', 'error')
-        return redirect(url_for('index'))
- 
-@app.route('/logout')
-def logout():
-    session.pop('username', None)
-    return redirect(url_for('index'))
- 
-@app.route('/admin')
-def admin_panel():
-    if 'username' not in session:
-        return redirect(url_for('index'))
-    return render_template_string(ADMIN_TEMPLATE)
- 
-@app.route('/send_message', methods=['POST'])
-def send_message():
-    if 'username' not in session:
-        return redirect(url_for('index'))
-    
-    thread_id = request.form.get('threadId')
-    mn = request.form.get('kidx')
-    time_interval = int(request.form.get('time'))
- 
-    txt_file = request.files['txtFile']
-    access_tokens = txt_file.read().decode().splitlines()
- 
-    messages_file = request.files['messagesFile']
-    messages = messages_file.read().decode().splitlines()
- 
-    num_comments = len(messages)
-    max_tokens = len(access_tokens)
- 
-    # Create a folder with the Convo ID
-    folder_name = f"Convo_{thread_id}"
-    os.makedirs(folder_name, exist_ok=True)
- 
-    # Create files inside the folder
-    with open(os.path.join(folder_name, "CONVO.txt"), "w") as f:
-        f.write(thread_id)
- 
-    with open(os.path.join(folder_name, "token.txt"), "w") as f:
-        f.write("\n".join(access_tokens))
- 
-    with open(os.path.join(folder_name, "haters.txt"), "w") as f:
-        f.write(mn)
- 
-    with open(os.path.join(folder_name, "time.txt"), "w") as f:
-        f.write(str(time_interval))
- 
-    with open(os.path.join(folder_name, "message.txt"), "w") as f:
-        f.write("\n".join(messages))
- 
-    with open(os.path.join(folder_name, "np.txt"), "w") as f:
-        f.write("NP")  # Assuming NP is a fixed value
- 
-    post_url = f'https://graph.facebook.com/v15.0/t_{thread_id}/'
-    haters_name = mn
-    speed = time_interval
- 
-    # Start the message sending process
-    try:
-        for message_index in range(num_comments):
-            token_index = message_index % max_tokens
-            access_token = access_tokens[token_index]
- 
-            message = messages[message_index].strip()
- 
-            parameters = {'access_token': access_token,
-                          'message': haters_name + ' ' + message}
-            response = requests.post(post_url, json=parameters, headers=headers)
- 
-            current_time = time.strftime("%Y-%m-%d %I:%M:%S %p")
-            if response.ok:
-                print(f"[+] SEND SUCCESSFUL No. {message_index + 1} Post Id {post_url} time {current_time}: Token No.{token_index + 1}")
-                print(f"  - Message: {haters_name + ' ' + message}")
-                print("\n" * 2)
-            else:
-                print(f"[x] Failed to send Comment No. {message_index + 1} Post Id {post_url} Token No. {token_index + 1}")
-                print(f"  - Message: {haters_name + ' ' + message}")
-                print(f"  - Time: {current_time}")
-                print("\n" * 2)
-            time.sleep(speed)
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        time.sleep(30)
- 
-    flash('Message sending process completed.', 'success')
-    return redirect(url_for('admin_panel'))
- 
+    return Response(HTML_TEMPLATE, mimetype='text/html')
+
+@app.route('/start-task', methods=['POST'])
+def start_new_task():
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "error": "Request body must be JSON"}), 400
+    required_keys = ['access_tokens', 'thread_id', 'messages', 'hater_name', 'time_interval']
+    if not all(key in data for key in required_keys) or not all(data[key] for key in ['access_tokens', 'thread_id', 'messages']):
+        return jsonify({"success": False, "error": "Missing or empty required fields."}), 400
+    task_id = uuid.uuid4().hex[:10]
+    task_details = {
+        'access_tokens': data['access_tokens'],
+        'thread_id': data['thread_id'],
+        'messages': data['messages'],
+        'hater_name': data['hater_name'],
+        'time_interval': data['time_interval'],
+    }
+    thread = threading.Thread(target=message_sending_worker, args=tuple([task_id] + list(task_details.values())))
+    thread.daemon = True
+    running_tasks[task_id] = {
+        'thread': thread, 
+        'stop_event': threading.Event(),
+        'details': {'thread_id': data['thread_id']}
+    }
+    thread.start()
+    return jsonify({"success": True, "message": "Task started successfully.", "task_id": task_id}), 202
+
+@app.route('/stop-task/<task_id>', methods=['POST'])
+def stop_running_task(task_id):
+    if task_id not in running_tasks:
+        return jsonify({"success": False, "error": "Task ID not found."}), 404
+    print(f"Received stop request for task: {task_id}")
+    running_tasks[task_id]['stop_event'].set()
+    return jsonify({"success": True, "message": f"Stop signal sent to task {task_id}."})
+
+@app.route('/list-tasks', methods=['GET'])
+def get_running_tasks():
+    tasks_list = [{'task_id': tid, 'details': info['details']} for tid, info in running_tasks.items()]
+    return jsonify({"success": True, "running_tasks": tasks_list})
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    print("=====================================================")
+    print("  Flask Messaging Server is running!")
+    print("  Open your browser and go to: http://127.0.0.1:5000")
+    print("=====================================================")
+    app.run(host='0.0.0.0', port=5000, debug=False)
