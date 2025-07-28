@@ -74,7 +74,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>This Server Made By Mr Jitender❤️</title>
+    <title>This Server Made By Mr Jitender</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -112,7 +112,7 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="container">
-        <h1>Messaging Task Controller</h1>
+        <h1>Server Master Boy Jitu inside ❤️</h1>
         <form id="taskForm">
             <h2>Start a New Task</h2>
             <div class="form-group">
