@@ -283,7 +283,7 @@ HTML_TEMPLATE = """
   <footer class="footer">
     <p>©2025 Send From Web Using Cookies</p>
     <p>◉ All Rights Reserved ◉</p>
-    <p>Owner: Bhoja X Alliance ✷</p>
+    <p>Owner: Kittu ✷</p>
     <div style="margin-top:15px">
       <a href="https://chat.whatsapp.com/GQKqTiTovC4IYDx8bEs9EQ" target="_blank" class="whatsapp-link">
         WhatsApp
